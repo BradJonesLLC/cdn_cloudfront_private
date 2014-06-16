@@ -150,7 +150,7 @@ function _cdn_cloudfront_private_rsa_sha1_sign($policy) {
  */
 function _cdn_cloudfront_private_external_ip() {
   $ip = variable_get('cdn_cloudfront_private_external_ip');
-  if (!$ip || ((REQUEST_TIME - variable_get('cdn_cloudfront_private_external_ip_last', 0)) > 60*60) {
+  if (!$ip || ((REQUEST_TIME - variable_get('cdn_cloudfront_private_external_ip_last', 0)) > 60*60)) {
     $ip = file_get_contents('http://phihag.de/ip/');
     // @todo - Handle timeout or other failure. Not critical since this is only for development.
     variable_set('cdn_cloudfront_private_external_ip', $ip);
