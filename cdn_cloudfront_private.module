@@ -17,8 +17,9 @@ function cdn_cloudfront_private_file_url_alter(&$uri) {
   // will normally guarantee this.
   if (file_uri_scheme($uri)) {
     // If we have a stream wrapper (and not just a path) and the admin user is allowed to
-    // bypass file access, serve the public file via a pipe. This cuts out the CDN but does
-    // add overhead. The goal is to allow the admin to view content not otherwise accessible
+    // bypass file access, and we want to display CDN links on this Drupal path, then
+    // serve the public file via a pipe. This cuts out the CDN but does add overhead.
+    // The goal is to allow the admin to view content not otherwise accessible
     // by the end user without a token.
     if (user_access('bypass file access') && cdn_check_drupal_path(current_path())) {
       // We are removing the scheme, which is OK in this limited scope.
