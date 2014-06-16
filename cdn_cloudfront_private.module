@@ -7,7 +7,7 @@
 define('CDN_CLOUDFRONT_PRIVATE_PREFIX', 'protected');
 define('CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING', '_public_');
 define('CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE', 'cdn_cloudfront_private/public');
-define('CDN_CLOUDFRONT_PRIVATE_DOMAIN', 'cloudfront.net/');
+define('CDN_CLOUDFRONT_PRIVATE_DOMAIN', 'cloudfront.net');
 
 /**
  * Implements hook_file_url_alter()
@@ -19,13 +19,15 @@ function cdn_cloudfront_private_file_url_alter(&$uri) {
     // If we have a stream wrapper (and not just a path) and the admin user is allowed to
     // bypass file access, and we want to display CDN links on this Drupal path, then
     // serve the public file via a pipe. This cuts out the CDN but does add overhead.
-    // The goal is to allow the admin to view content not otherwise accessible
-    // by the end user without a token.
-    if (user_access('bypass file access') && cdn_check_drupal_path(current_path())) {
+    // The goal is to allow the admin to view content not delivered by the CDN
+    // due to the Drupal path exclusion and not accessible directly due to .htaccess.
+    if (!url_is_external($uri) && user_access('bypass file access') && !cdn_check_drupal_path(current_path())) {
       // We are removing the scheme, which is OK in this limited scope.
       $uri = '/' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE . '/' . file_uri_target($uri);
     }
-    else if ((strpos($uri, CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING) === FALSE) && strpos($uri, CDN_CLOUDFRONT_PRIVATE_DOMAIN)) {
+    else if (url_is_external($uri) // External
+            && (strpos(parse_url($uri, PHP_URL_HOST), CDN_CLOUDFRONT_PRIVATE_DOMAIN) !== FALSE) // Is CloudFront
+            && (strpos($uri, CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING) === FALSE)) { // Needs a signed URL
       // Check access and generate a token.
       if (user_access('view private cloudfront files')) {
         $parts = parse_url($uri, PHP_URL_QUERY);
@@ -63,6 +65,13 @@ function cdn_cloudfront_private_menu() {
     'access arguments' => array('bypass file access'),
     'type' => MENU_CALLBACK,
   );
+  $items[CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE . '/styles/%image_style'] = array(
+    'title' => 'Generate image style',
+    'page callback' => 'image_style_deliver',
+    'page arguments' => array(3),
+    'access arguments' => array('bypass file access'),
+    'type' => MENU_CALLBACK,
+  );
   $items['admin/config/development/cdn/cdn_cloudfront_private'] = array(
     'title' => 'CloudFront Private',
     'description' => t("Cloudfront private files config"),
@@ -93,7 +102,7 @@ function cdn_cloudfront_private_file_presave($file) {
   }
   // Identify the file as allowing public access.
   $file_wrapper = entity_metadata_wrapper('file', $file);
-  if ($file_wrapper->field_guest_access->value() && !strpos($file->filename, CDN_CLOUDFRONT_PUBLIC_STRING)) {
+  if ($file_wrapper->field_guest_access->value() && !strpos($file->filename, CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING)) {
     $stream_wrapper = file_stream_wrapper_get_instance_by_uri($file->uri);
     $mimetype = $stream_wrapper->getMimetype($file->uri);
     $mapping = file_mimetype_mapping();
