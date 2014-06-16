@@ -5,23 +5,26 @@
  */
 
 define('CDN_CLOUDFRONT_PRIVATE_PREFIX', 'protected');
-define('CDN_CLOUDFRONT_PUBLIC_STRING', '_public_');
+define('CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING', '_public_');
 define('CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE', 'cdn_cloudfront_private/public');
+define('CDN_CLOUDFRONT_PRIVATE_DOMAIN', 'cloudfront.net/');
 
 /**
  * Implements hook_file_url_alter()
  */
 function cdn_cloudfront_private_file_url_alter(&$uri) {
+  // We assume that CDN module has already done its thing. Default module weight
+  // will normally guarantee this.
   if (file_uri_scheme($uri)) {
     // If we have a stream wrapper (and not just a path) and the admin user is allowed to
     // bypass file access, serve the public file via a pipe. This cuts out the CDN but does
     // add overhead. The goal is to allow the admin to view content not otherwise accessible
     // by the end user without a token.
-    if (user_access('bypass file access') && !cdn_check_drupal_path(current_path())) {
+    if (user_access('bypass file access') && cdn_check_drupal_path(current_path())) {
       // We are removing the scheme, which is OK in this limited scope.
       $uri = '/' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE . '/' . file_uri_target($uri);
     }
-    else if (strpos($uri, CDN_CLOUDFRONT_PUBLIC_STRING) === FALSE) {
+    else if ((strpos($uri, CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING) === FALSE) && strpos($uri, CDN_CLOUDFRONT_PRIVATE_DOMAIN)) {
       // Check access and generate a token.
       if (user_access('view private cloudfront files')) {
         $parts = parse_url($uri, PHP_URL_QUERY);
@@ -30,6 +33,9 @@ function cdn_cloudfront_private_file_url_alter(&$uri) {
           $params += _netbillilng_membership_parse_str_multiple($parts);
         }
         $uri = preg_replace('/\?.*/', '', $uri) . '?' . drupal_http_build_query($params);
+      }
+      else {
+        // @todo - Handle exception condition. Site design should limit this.
       }
     }
   }
@@ -73,7 +79,7 @@ function cdn_cloudfront_private_menu() {
  * Don't allow any incoming files to contain our .public. suffix - that's only for us.
  */
 function cdn_cloudfront_private_transliteration_clean_filename_prepare_alter(&$filename, $source_langcode) {
-  $filename = str_replace(CDN_CLOUDFRONT_PUBLIC_STRING, '-public-', $filename);
+  $filename = str_replace(CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING, '-public-', $filename);
 }
 
 /**
@@ -92,7 +98,7 @@ function cdn_cloudfront_private_file_presave($file) {
     $mapping = file_mimetype_mapping();
     $extension = array_search(array_search($mimetype, $mapping['mimetypes']), $mapping['extensions']);
     // We don't really need to munge since we are requiring an OK extension to begin with.
-    $destination = $file->uri . '.' . CDN_CLOUDFRONT_PUBLIC_STRING . '.' . $extension;
+    $destination = $file->uri . '.' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING . '.' . $extension;
     // The file was already saved to disk; file_save() just calls hooks and writes to the DB.
     $stream_wrapper->rename($file->uri, $destination);
     $file->uri = $destination;
@@ -100,7 +106,7 @@ function cdn_cloudfront_private_file_presave($file) {
   }
   else if (!$file_wrapper->field_guest_access->value() && strpos($file->filename, CDN_CLOUDFRONT_PUBLIC_STRING)) {
     $original_filename = $file->filename;
-    $file->filename = str_replace('.' . CDN_CLOUDFRONT_PUBLIC_STRING . '.', '.', $file->filename);
+    $file->filename = str_replace('.' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING . '.', '.', $file->filename);
     $destination = str_replace($original_filename, $file->filename, $file->uri);
     $stream_wrapper = file_stream_wrapper_get_instance_by_uri($file->uri);
     $stream_wrapper->rename($file->uri, $destination);
@@ -144,10 +150,23 @@ function _cdn_cloudfront_private_rsa_sha1_sign($policy) {
  */
 function _cdn_cloudfront_private_external_ip() {
   $ip = variable_get('cdn_cloudfront_private_external_ip');
-  if (!$ip || (variable_get('cdn_cloudfront_private_external_ip_last', 0) < (REQUEST_TIME - 60 * 5))) {
+  if (!$ip || ((REQUEST_TIME - variable_get('cdn_cloudfront_private_external_ip_last', 0)) > 60*60) {
     $ip = file_get_contents('http://phihag.de/ip/');
+    // @todo - Handle timeout or other failure. Not critical since this is only for development.
+    variable_set('cdn_cloudfront_private_external_ip', $ip);
+    variable_set('cdn_cloudfront_private_external_ip_last', REQUEST_TIME);
   }
   return $ip;
+}
+
+/**
+ * Determine if a future timestamp is near expiry (within 10 minutes.)
+ *
+ * @param $timestamp
+ * @return bool
+ */
+function _cdn_cloudfront_private_near_expiry($timestamp) {
+  return $timestamp < (time() + (10*60));
 }
 
 /**
@@ -159,24 +178,51 @@ function _cdn_cloudfront_private_custom_policy_params() {
   // Get an external IP for the host, if we are on a local development environment.
   $drupal_ip = ip_address();
   $ip_address = ($drupal_ip == '127.0.0.1') ? _cdn_cloudfront_private_external_ip() : $drupal_ip;
-  $policy = json_encode(array(
-    // Extra array is to get a square-bracket JSON "container" to match the AWS docs.
-    'Statement' => array(array(
-      // No Resource as we're granting blanket access.
-      'Condition' => array(
-        'DateLessThan' => array('AWS:EpochTime' => REQUEST_TIME + variable_get('cdn_cloudfront_private_token_duration', 60 * 60 * 5)),
-        // At the time of development, CloudFront doesn't do IPv6.
-        // @todo - IPv6 support.
-        'IpAddress' => array('AWS:SourceIp' => $ip_address . '/32'),
-      )
-    ))
-  ));
+  // Statically cache with advanced form since we may call this very often.
+  global $user;
+  static $drupal_static_fast;
+  if (!isset($drupal_static_fast)) {
+    $drupal_static_fast = &drupal_static(__FUNCTION__);
+  }
+  $data = &$drupal_static_fast;
+  // Generate parameters if they're not set or they expire within the next 10 minutes.
+  // We don't check the statically cached time for near-expiry, since we're likely either
+  // generating or pulling from cache.
+  if (!isset($data[$user->uid][$ip_address])) {
+    $cid = 'cdn_cloudfront_private_policy:' . $user->uid . '_' . $ip_address;
+    $cache = cache_get($cid);
+    if ($cache && !_cdn_cloudfront_private_near_expiry($cache->data['#expire'])) {
+      $data[$user->uid][$ip_address] = $cache->data;
 
-  return array(
-    'Policy' => _cdn_cloudfront_private_base64_encode($policy),
-    'Signature' => _cdn_cloudfront_private_base64_encode(_cdn_cloudfront_private_rsa_sha1_sign($policy)),
-    'Key-Pair-Id' => variable_get('cdn_cloudfront_private_key_id'),
-  );
+    }
+    else {
+      $expire = REQUEST_TIME + variable_get('cdn_cloudfront_private_token_duration', 60 * 60 * 5);
+      $policy = json_encode(array(
+        // Extra array is to get a square-bracket JSON "container" to match the AWS docs.
+        'Statement' => array(array(
+          // No Resource as we're granting blanket access.
+          'Condition' => array(
+            'DateLessThan' => array('AWS:EpochTime' => $expire),
+            // At the time of development, CloudFront doesn't do IPv6.
+            // @todo - IPv6 support.
+            'IpAddress' => array('AWS:SourceIp' => $ip_address . '/32'),
+          )
+        ))
+      ));
+
+      $record = $data[$user->uid][$ip_address] = array(
+        '#expire' => $expire,
+        '#params' => array(
+          'Policy' => _cdn_cloudfront_private_base64_encode($policy),
+          'Signature' => _cdn_cloudfront_private_base64_encode(_cdn_cloudfront_private_rsa_sha1_sign($policy)),
+          'Key-Pair-Id' => variable_get('cdn_cloudfront_private_key_id'),
+        )
+      );
+      // @todo - Should we use our own cache table?
+      cache_set($cid, $record, 'cache', $expire);
+    }
+  }
+  return $data[$user->uid][$ip_address]['#params'];
 }
 
 /**
