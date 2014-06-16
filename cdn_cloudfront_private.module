@@ -6,9 +6,65 @@
 
 define('CDN_CLOUDFRONT_PRIVATE_PREFIX', 'protected');
 define('CDN_CLOUDFRONT_PUBLIC_STRING', '_public_');
+define('CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE', 'cdn_cloudfront_private/public');
 
+/**
+ * Implements hook_file_url_alter()
+ */
 function cdn_cloudfront_private_file_url_alter(&$uri) {
-  // Do amazon token logic here.
+  if (file_uri_scheme($uri)) {
+    // If we have a stream wrapper (and not just a path) and the admin user is allowed to
+    // bypass file access, serve the public file via a pipe. This cuts out the CDN but does
+    // add overhead. The goal is to allow the admin to view content not otherwise accessible
+    // by the end user without a token.
+    if (user_access('bypass file access') && !cdn_check_drupal_path(current_path())) {
+      // We are removing the scheme, which is OK in this limited scope.
+      $uri = '/' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE . '/' . file_uri_target($uri);
+    }
+    else if (strpos($uri, CDN_CLOUDFRONT_PUBLIC_STRING) === FALSE) {
+      // Check access and generate a token.
+      if (user_access('view private cloudfront files')) {
+        $parts = parse_url($uri, PHP_URL_QUERY);
+        $params = _cdn_cloudfront_private_custom_policy_params();
+        if ($parts) {
+          $params += _netbillilng_membership_parse_str_multiple($parts);
+        }
+        $uri = preg_replace('/\?.*/', '', $uri) . '?' . drupal_http_build_query($params);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_permission()
+ */
+function cdn_cloudfront_private_permission() {
+  return array(
+    'view private cloudfront files' => array(
+      'title' => t('Grant user a token to view private files on CloudFront CDN'),
+    ),
+  );
+}
+
+function cdn_cloudfront_private_menu() {
+  $items = array();
+  // @see system.module
+  $items[CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE] = array(
+    'title' => 'Deliver public files via pipe directly, not via CDN',
+    'page callback' => 'file_download',
+    'page arguments' => array('public'),
+    'access arguments' => array('bypass file access'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['admin/config/development/cdn/cdn_cloudfront_private'] = array(
+    'title' => 'CloudFront Private',
+    'description' => t("Cloudfront private files config"),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cdn_cloudfront_private_admin_settings'),
+    'access arguments' => array('CDN_PERM_ADMIN'),
+    'file' => 'cdn_cloudfront_private.admin.inc',
+  );
+  return $items;
 }
 
 /**
@@ -57,4 +113,82 @@ function cdn_cloudfront_private_file_presave($file) {
  */
 function cdn_cloudfront_private_form_file_entity_add_upload_multiple_alter(&$form, &$form_state, $form_id) {
   $form['upload']['#upload_location'] .= CDN_CLOUDFRONT_PRIVATE_PREFIX . '-bulk-original';
+}
+
+/**
+ * Sign a CloudFront custom policy.
+ *
+ * @param $policy
+ * @return string
+ */
+function _cdn_cloudfront_private_rsa_sha1_sign($policy) {
+  $signature = "";
+
+  // @todo - Better error here
+  if (!$keyfile = variable_get('cdn_cloudfront_private_keyfile')) {
+    return $signature;
+  }
+  $fp = fopen($keyfile, "r");
+  $priv_key = fread($fp, 8192);
+  fclose($fp);
+  $pkeyid = openssl_get_privatekey($priv_key);
+  openssl_sign($policy, $signature, $pkeyid);
+  openssl_free_key($pkeyid);
+  return $signature;
+}
+
+/**
+ * Return the external IP (for circumstances where we are local).
+ *
+ * @return string External IP
+ */
+function _cdn_cloudfront_private_external_ip() {
+  $ip = variable_get('cdn_cloudfront_private_external_ip');
+  if (!$ip || (variable_get('cdn_cloudfront_private_external_ip_last', 0) < (REQUEST_TIME - 60 * 5))) {
+    $ip = file_get_contents('http://phihag.de/ip/');
+  }
+  return $ip;
+}
+
+/**
+ * Provide custom policy parameters for access to the CloudFront CDN private files.
+ *
+ * @return array Array of parameters to add to the request
+ */
+function _cdn_cloudfront_private_custom_policy_params() {
+  // Get an external IP for the host, if we are on a local development environment.
+  $drupal_ip = ip_address();
+  $ip_address = ($drupal_ip == '127.0.0.1') ? _cdn_cloudfront_private_external_ip() : $drupal_ip;
+  $policy = json_encode(array(
+    // Extra array is to get a square-bracket JSON "container" to match the AWS docs.
+    'Statement' => array(array(
+      // No Resource as we're granting blanket access.
+      'Condition' => array(
+        'DateLessThan' => array('AWS:EpochTime' => REQUEST_TIME + variable_get('cdn_cloudfront_private_token_duration', 60 * 60 * 5)),
+        // At the time of development, CloudFront doesn't do IPv6.
+        // @todo - IPv6 support.
+        'IpAddress' => array('AWS:SourceIp' => $ip_address . '/32'),
+      )
+    ))
+  ));
+
+  return array(
+    'Policy' => _cdn_cloudfront_private_base64_encode($policy),
+    'Signature' => _cdn_cloudfront_private_base64_encode(_cdn_cloudfront_private_rsa_sha1_sign($policy)),
+    'Key-Pair-Id' => variable_get('cdn_cloudfront_private_key_id'),
+  );
+}
+
+/**
+ * Encodes a string into Base64 and sanitizes.
+ *
+ * Similar to drupal_base64_encode but the replacements are different.
+ *
+ * @param $string String to sanitize
+ * @return string Sanitized string
+ */
+function _cdn_cloudfront_private_base64_encode($string) {
+  $data = base64_encode($string);
+  // @see http://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-creating-signed-url-custom-policy.html
+  return strtr($data, array('+' => '-', '/' => '~', '=' => '_'));
 }
