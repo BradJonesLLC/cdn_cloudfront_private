@@ -1,0 +1,60 @@
+<?php
+
+/**
+ * @file Cloudfront private files implementation
+ */
+
+define('CDN_CLOUDFRONT_PRIVATE_PREFIX', 'protected');
+define('CDN_CLOUDFRONT_PUBLIC_STRING', '_public_');
+
+function cdn_cloudfront_private_file_url_alter(&$uri) {
+  // Do amazon token logic here.
+}
+
+/**
+ * Implements hook_transliteration_clean_filename_prepare_alter()
+ *
+ * Don't allow any incoming files to contain our .public. suffix - that's only for us.
+ */
+function cdn_cloudfront_private_transliteration_clean_filename_prepare_alter(&$filename, $source_langcode) {
+  $filename = str_replace(CDN_CLOUDFRONT_PUBLIC_STRING, '-public-', $filename);
+}
+
+/**
+ * Implements hook_file_presave()
+ */
+function cdn_cloudfront_private_file_presave($file) {
+  // This might be a new file and as such isn't set up as a file entity.
+  if (empty($file->fid)) {
+    return;
+  }
+  // Identify the file as allowing public access.
+  $file_wrapper = entity_metadata_wrapper('file', $file);
+  if ($file_wrapper->field_guest_access->value() && !strpos($file->filename, CDN_CLOUDFRONT_PUBLIC_STRING)) {
+    $stream_wrapper = file_stream_wrapper_get_instance_by_uri($file->uri);
+    $mimetype = $stream_wrapper->getMimetype($file->uri);
+    $mapping = file_mimetype_mapping();
+    $extension = array_search(array_search($mimetype, $mapping['mimetypes']), $mapping['extensions']);
+    // We don't really need to munge since we are requiring an OK extension to begin with.
+    $destination = $file->uri . '.' . CDN_CLOUDFRONT_PUBLIC_STRING . '.' . $extension;
+    // The file was already saved to disk; file_save() just calls hooks and writes to the DB.
+    $stream_wrapper->rename($file->uri, $destination);
+    $file->uri = $destination;
+    $file->filename = drupal_basename($destination);
+  }
+  else if (!$file_wrapper->field_guest_access->value() && strpos($file->filename, CDN_CLOUDFRONT_PUBLIC_STRING)) {
+    $original_filename = $file->filename;
+    $file->filename = str_replace('.' . CDN_CLOUDFRONT_PUBLIC_STRING . '.', '.', $file->filename);
+    $destination = str_replace($original_filename, $file->filename, $file->uri);
+    $stream_wrapper = file_stream_wrapper_get_instance_by_uri($file->uri);
+    $stream_wrapper->rename($file->uri, $destination);
+    $file->uri = $destination;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter()
+ */
+function cdn_cloudfront_private_form_file_entity_add_upload_multiple_alter(&$form, &$form_state, $form_id) {
+  $form['upload']['#upload_location'] .= CDN_CLOUDFRONT_PRIVATE_PREFIX . '-bulk-original';
+}
