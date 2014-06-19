@@ -114,7 +114,7 @@ function cdn_cloudfront_private_file_presave($file) {
     $file->uri = $destination;
     $file->filename = drupal_basename($destination);
   }
-  else if (!$file_wrapper->field_guest_access->value() && strpos($file->filename, CDN_CLOUDFRONT_PUBLIC_STRING)) {
+  else if (!$file_wrapper->field_guest_access->value() && strpos($file->filename, CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING)) {
     $original_filename = $file->filename;
     $file->filename = str_replace('.' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING . '.', '.', $file->filename);
     $destination = str_replace($original_filename, $file->filename, $file->uri);
