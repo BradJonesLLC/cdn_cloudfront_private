@@ -17,11 +17,11 @@ function cdn_cloudfront_private_file_url_alter(&$uri) {
   // will normally guarantee this.
   if (file_uri_scheme($uri)) {
     // If we have a stream wrapper (and not just a path) and the admin user is allowed to
-    // bypass file access, and we want to display CDN links on this Drupal path, then
+    // bypass file access, and we don't want CDN links on this Drupal path, then
     // serve the public file via a pipe. This cuts out the CDN but does add overhead.
     // The goal is to allow the admin to view content not delivered by the CDN
     // due to the Drupal path exclusion and not accessible directly due to .htaccess.
-    if (!url_is_external($uri) && user_access('bypass file access') && !cdn_check_drupal_path(current_path())) {
+    if (!url_is_external($uri) && user_access('bypass file access') && !cdn_check_drupal_path(current_path()) && cdn_check_file($uri)) {
       // We are removing the scheme, which is OK in this limited scope.
       $uri = '/' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE . '/' . file_uri_target($uri);
     }
@@ -68,7 +68,7 @@ function cdn_cloudfront_private_menu() {
   $items[CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE . '/styles/%image_style'] = array(
     'title' => 'Generate image style',
     'page callback' => 'image_style_deliver',
-    'page arguments' => array(3),
+    'page arguments' => array(count(explode('/', CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE)) + 1),
     'access arguments' => array('bypass file access'),
     'type' => MENU_CALLBACK,
   );
@@ -77,7 +77,7 @@ function cdn_cloudfront_private_menu() {
     'description' => t("Cloudfront private files config"),
     'page callback' => 'drupal_get_form',
     'page arguments' => array('cdn_cloudfront_private_admin_settings'),
-    'access arguments' => array('CDN_PERM_ADMIN'),
+    'access arguments' => array(CDN_PERM_ADMIN),
     'file' => 'cdn_cloudfront_private.admin.inc',
   );
   return $items;
