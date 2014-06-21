@@ -23,7 +23,7 @@ function cdn_cloudfront_private_file_url_alter(&$uri) {
     // due to the Drupal path exclusion and not accessible directly due to .htaccess.
     if (!url_is_external($uri) && user_access('bypass file access') && !cdn_check_drupal_path(current_path()) && cdn_check_file($uri)) {
       // We are removing the scheme, which is OK in this limited scope.
-      $uri = '/' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE . '/' . file_uri_target($uri);
+      $uri = CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE . '/' . file_uri_target($uri);
     }
     else if (url_is_external($uri) // External
             && (strpos(parse_url($uri, PHP_URL_HOST), CDN_CLOUDFRONT_PRIVATE_DOMAIN) !== FALSE) // Is CloudFront
@@ -102,6 +102,7 @@ function cdn_cloudfront_private_file_presave($file) {
   }
   // Identify the file as allowing public access.
   $file_wrapper = entity_metadata_wrapper('file', $file);
+  $is_public_file = ($file_wrapper->__isset('field_guest_access') && $file_wrapper->field_guest_access->value());
   if ($file_wrapper->field_guest_access->value() && !strpos($file->filename, CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING)) {
     $stream_wrapper = file_stream_wrapper_get_instance_by_uri($file->uri);
     $mimetype = $stream_wrapper->getMimetype($file->uri);
@@ -114,7 +115,7 @@ function cdn_cloudfront_private_file_presave($file) {
     $file->uri = $destination;
     $file->filename = drupal_basename($destination);
   }
-  else if (!$file_wrapper->field_guest_access->value() && strpos($file->filename, CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING)) {
+  else if (strpos($file->filename, CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING) && !$is_public_file) {
     $original_filename = $file->filename;
     $file->filename = str_replace('.' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING . '.', '.', $file->filename);
     $destination = str_replace($original_filename, $file->filename, $file->uri);
