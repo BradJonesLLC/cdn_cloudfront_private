@@ -55,6 +55,9 @@ function cdn_cloudfront_private_permission() {
   );
 }
 
+/**
+ * Implements hook_menu()
+ */
 function cdn_cloudfront_private_menu() {
   $items = array();
   // @see system.module
