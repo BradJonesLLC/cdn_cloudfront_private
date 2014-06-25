@@ -89,7 +89,7 @@ function cdn_cloudfront_private_menu() {
 /**
  * Implements hook_transliteration_clean_filename_prepare_alter()
  *
- * Don't allow any incoming files to contain our .public. suffix - that's only for us.
+ * Don't allow any incoming files to contain our public flag string - that's only for us.
  */
 function cdn_cloudfront_private_transliteration_clean_filename_prepare_alter(&$filename, $source_langcode) {
   $filename = str_replace(CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING, '-public-', $filename);
