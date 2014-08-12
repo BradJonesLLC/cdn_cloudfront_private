@@ -29,5 +29,11 @@ function cdn_cloudfront_private_admin_settings() {
     '#description' => t('Absolute system path to PEM keyfile'),
     '#required' => TRUE,
   );
+  $form['cdn_cloudfront_private_no_token'] = array(
+    '#type' => 'textarea',
+    '#title' => t('URIs which never require a token'),
+    '#default_value' => '*' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING . '*',
+    '#description' => t('URI patterns, one per line, which never require a token when accessed from CDN.'),
+  );
   return system_settings_form($form);
 }
