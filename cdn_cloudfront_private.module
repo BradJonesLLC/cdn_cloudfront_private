@@ -108,21 +108,23 @@ function cdn_cloudfront_private_file_presave($file) {
   $is_public_file = ($file_wrapper->__isset('field_guest_access') && $file_wrapper->field_guest_access->value());
   if ($file_wrapper->field_guest_access->value() && !strpos($file->filename, CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING)) {
     $stream_wrapper = file_stream_wrapper_get_instance_by_uri($file->uri);
-    $mimetype = $stream_wrapper->getMimetype($file->uri);
-    $mapping = file_mimetype_mapping();
-    $extension = array_search(array_search($mimetype, $mapping['mimetypes']), $mapping['extensions']);
+    $basename = drupal_basename($file->uri);
+    // Next from file_create_filename()
+    $pos = strrpos($basename, '.');
+    $extension = substr($basename, $pos);
+    $name = substr($basename, 0, $pos);
     // We don't really need to munge since we are requiring an OK extension to begin with.
-    $destination = $file->uri . '.' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING . '.' . $extension;
+    $destination = file_destination($stream_wrapper->dirname($file->uri) . '/' . $name . '.' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING . $extension, FILE_EXISTS_RENAME);
     // The file was already saved to disk; file_save() just calls hooks and writes to the DB.
     $stream_wrapper->rename($file->uri, $destination);
     $file->uri = $destination;
     $file->filename = drupal_basename($destination);
   }
   else if (strpos($file->filename, CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING) && !$is_public_file) {
-    $original_filename = $file->filename;
-    $file->filename = str_replace('.' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING . '.', '.', $file->filename);
-    $destination = str_replace($original_filename, $file->filename, $file->uri);
     $stream_wrapper = file_stream_wrapper_get_instance_by_uri($file->uri);
+    $basename = drupal_basename($file->uri);
+    $destination = file_destination($stream_wrapper->dirname($file->uri) . '/' . str_replace('.' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING, '', $basename), FILE_EXISTS_RENAME);
+    $file->filename = drupal_basename($destination);
     $stream_wrapper->rename($file->uri, $destination);
     $file->uri = $destination;
   }
