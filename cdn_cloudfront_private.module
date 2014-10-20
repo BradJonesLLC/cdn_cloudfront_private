@@ -106,7 +106,7 @@ function cdn_cloudfront_private_file_presave($file) {
   // Identify the file as allowing public access.
   $file_wrapper = entity_metadata_wrapper('file', $file);
   $is_public_file = ($file_wrapper->__isset('field_guest_access') && $file_wrapper->field_guest_access->value());
-  if ($file_wrapper->field_guest_access->value() && !strpos($file->filename, CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING)) {
+  if ($is_public_file && !strpos($file->filename, CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING)) {
     $stream_wrapper = file_stream_wrapper_get_instance_by_uri($file->uri);
     $basename = drupal_basename($file->uri);
     // Next from file_create_filename()
