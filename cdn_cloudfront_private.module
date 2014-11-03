@@ -212,19 +212,23 @@ function _cdn_cloudfront_private_custom_policy_params() {
 
     }
     else {
+      // Default expiration == 5 hours.
       $expire = REQUEST_TIME + variable_get('cdn_cloudfront_private_token_duration', 60 * 60 * 5);
-      $policy = json_encode(array(
+      $policy = array(
         // Extra array is to get a square-bracket JSON "container" to match the AWS docs.
         'Statement' => array(array(
           // No Resource as we're granting blanket access.
           'Condition' => array(
             'DateLessThan' => array('AWS:EpochTime' => $expire),
-            // At the time of development, CloudFront doesn't do IPv6.
-            // @todo - IPv6 support.
-            'IpAddress' => array('AWS:SourceIp' => $ip_address . '/32'),
           )
         ))
-      ));
+      );
+      // At the time of development, CloudFront doesn't do IPv6. Client must have a dual-stack.
+      // We can't determine IPv4
+      if (strpos($ip_address, ":") === FALSE) {
+        $policy['Statement'][0]['Condition']['IpAddress'] = array('AWS:SourceIp' => $ip_address . '/32');
+      }
+      $policy = json_encode($policy);
 
       $record = $data[$user->uid][$ip_address] = array(
         '#expire' => $expire,
