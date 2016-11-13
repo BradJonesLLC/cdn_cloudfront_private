@@ -1,7 +1,0 @@
-name = Cloudfront private files
-description = Enables support for serving private content from AWS Cloudfront.
-package = CDN
-core = 7.x
-dependencies[] = cdn
-dependencies[] = file_entity
-dependencies[] = transliteration
