@@ -1,14 +1,6 @@
 # Amazon Cloudfront CDN private files integration
 
-## Required changes to .htaccess
-
-There must be a section in the site's .htaccess akin to:
-```
-  # Custom access control for directories we want served only from Cloudfront.
-  RewriteCond %{HTTP_USER_AGENT} !Amazon\wCloudfront
-  RewriteCond %{REQUEST_URI} .*\/files\/.*protected.*\/.*
-  RewriteRule ^ - [F]
-```
+In active development, NOT ready or functional for production use.
 
 ## Copyright and license.
 

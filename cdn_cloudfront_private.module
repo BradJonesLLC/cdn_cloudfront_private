@@ -13,6 +13,8 @@ define('CDN_CLOUDFRONT_PRIVATE_DOMAIN', 'cloudfront.net');
  * Implements hook_file_url_alter()
  */
 function cdn_cloudfront_private_file_url_alter(&$uri) {
+  // @todo - Fire event for modules to provide their own logic.
+  return;
   // We assume that CDN module has already done its thing. Default module weight
   // will normally guarantee this.
   if (file_uri_scheme($uri)) {
@@ -42,57 +44,6 @@ function cdn_cloudfront_private_file_url_alter(&$uri) {
       }
     }
   }
-}
-
-/**
- * Implements hook_permission()
- */
-function cdn_cloudfront_private_permission() {
-  return array(
-    'view private cloudfront files' => array(
-      'title' => t('Grant user a token to view private files on CloudFront CDN'),
-    ),
-  );
-}
-
-/**
- * Implements hook_menu()
- */
-function cdn_cloudfront_private_menu() {
-  $items = array();
-  // @see system.module
-  $items[CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE] = array(
-    'title' => 'Deliver public files via pipe directly, not via CDN',
-    'page callback' => 'file_download',
-    'page arguments' => array('public'),
-    'access arguments' => array('bypass file access'),
-    'type' => MENU_CALLBACK,
-  );
-  $items[CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE . '/styles/%image_style'] = array(
-    'title' => 'Generate image style',
-    'page callback' => 'image_style_deliver',
-    'page arguments' => array(count(explode('/', CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE)) + 1),
-    'access arguments' => array('bypass file access'),
-    'type' => MENU_CALLBACK,
-  );
-  $items['admin/config/development/cdn/cdn_cloudfront_private'] = array(
-    'title' => 'CloudFront Private',
-    'description' => t("Cloudfront private files config"),
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('cdn_cloudfront_private_admin_settings'),
-    'access arguments' => array(CDN_PERM_ADMIN),
-    'file' => 'cdn_cloudfront_private.admin.inc',
-  );
-  return $items;
-}
-
-/**
- * Implements hook_transliteration_clean_filename_prepare_alter()
- *
- * Don't allow any incoming files to contain our public flag string - that's only for us.
- */
-function cdn_cloudfront_private_transliteration_clean_filename_prepare_alter(&$filename, $source_langcode) {
-  $filename = str_replace(CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING, '-public-', $filename);
 }
 
 /**
@@ -128,35 +79,6 @@ function cdn_cloudfront_private_file_presave($file) {
     $stream_wrapper->rename($file->uri, $destination);
     $file->uri = $destination;
   }
-}
-
-/**
- * Implements hook_form_FORM_ID_alter()
- */
-function cdn_cloudfront_private_form_file_entity_add_upload_multiple_alter(&$form, &$form_state, $form_id) {
-  $form['upload']['#upload_location'] .= CDN_CLOUDFRONT_PRIVATE_PREFIX . '-bulk-original';
-}
-
-/**
- * Sign a CloudFront custom policy.
- *
- * @param $policy
- * @return string
- */
-function _cdn_cloudfront_private_rsa_sha1_sign($policy) {
-  $signature = "";
-
-  // @todo - Better error here
-  if (!$keyfile = variable_get('cdn_cloudfront_private_keyfile')) {
-    return $signature;
-  }
-  $fp = fopen($keyfile, "r");
-  $priv_key = fread($fp, 8192);
-  fclose($fp);
-  $pkeyid = openssl_get_privatekey($priv_key);
-  openssl_sign($policy, $signature, $pkeyid);
-  openssl_free_key($pkeyid);
-  return $signature;
 }
 
 /**
