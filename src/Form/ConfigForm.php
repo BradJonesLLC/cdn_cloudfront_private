@@ -33,13 +33,10 @@ class ConfigForm extends ConfigFormBase {
    */
   public function buildForm(array $form, FormStateInterface $form_state) {
     $config = $this->config('cdn_cloudfront_private.config');
-    // @todo - Still legacy D7 code below.
-    $form['#tree'] = TRUE;
     $form['security'] = array(
       '#title' => t('Security configuration'),
-      '#type' => 'fieldset',
-      '#collapsible' => TRUE,
-      '#collapsed' => $config->get('key_pair_id') && $config->get('private_key')
+      '#type' => 'details',
+      '#open' => !$config->get('key_pair_id') && !$config->get('private_key'),
     );
     $form['security']['key_pair_id'] = array(
       '#type' => 'textfield',
@@ -61,8 +58,7 @@ class ConfigForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
-    $file = $form_state->get('private_key');
-    if (!file_exists($form_state->get('security')['private_key'])) {
+    if (!file_exists($form_state->getValue('private_key'))) {
       $form_state->setErrorByName('private_key', $this->t('Private key file not found.'));
     }
   }
@@ -74,8 +70,8 @@ class ConfigForm extends ConfigFormBase {
     parent::submitForm($form, $form_state);
 
     $this->config('cdn_cloudfront_private.config')
-      ->set('private_key', $form_state->get('private_key'))
-      ->set('key_pair_id', $form_state->get('key_pair_id'))
+      ->set('private_key', $form_state->getValue('private_key'))
+      ->set('key_pair_id', $form_state->getValue('key_pair_id'))
       ->save();
   }
 
