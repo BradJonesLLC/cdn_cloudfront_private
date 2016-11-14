@@ -4,219 +4,36 @@
  * @file Cloudfront private files implementation
  */
 
-define('CDN_CLOUDFRONT_PRIVATE_PREFIX', 'protected');
-define('CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING', '_public_');
-define('CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE', 'cdn_cloudfront_private/public');
-define('CDN_CLOUDFRONT_PRIVATE_DOMAIN', 'cloudfront.net');
+use Drupal\cdn_cloudfront_private\CdnCloudfrontPrivateEvents;
+use Drupal\cdn_cloudfront_private\Event\CdnCloudfrontPrivateEvent;
+use Drupal\Component\Utility\UrlHelper;
 
 /**
  * Implements hook_file_url_alter()
  */
 function cdn_cloudfront_private_file_url_alter(&$uri) {
-  // @todo - Fire event for modules to provide their own logic.
-  return;
   // We assume that CDN module has already done its thing. Default module weight
-  // will normally guarantee this.
-  if (file_uri_scheme($uri)) {
-    // If we have a stream wrapper (and not just a path) and the admin user is allowed to
-    // bypass file access, and we don't want CDN links on this Drupal path, then
-    // serve the public file via a pipe. This cuts out the CDN but does add overhead.
-    // The goal is to allow the admin to view content not delivered by the CDN
-    // due to the Drupal path exclusion and not accessible directly due to .htaccess.
-    if (!url_is_external($uri) && user_access('bypass file access') && !cdn_check_drupal_path(current_path()) && cdn_check_file($uri)) {
-      // We are removing the scheme, which is OK in this limited scope.
-      $uri = CDN_CLOUDFRONT_PRIVATE_PUBLIC_PIPE . '/' . file_uri_target($uri);
-    }
-    else if (url_is_external($uri) // External
-            && (strpos(parse_url($uri, PHP_URL_HOST), CDN_CLOUDFRONT_PRIVATE_DOMAIN) !== FALSE) // Is CloudFront
-            && !drupal_match_path($uri, variable_get('cdn_cloudfront_private_no_token', '*' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING . '*'))) { // Needs a signed URL
-      // Check access and generate a token.
-      if (user_access('view private cloudfront files')) {
-        $parts = parse_url($uri, PHP_URL_QUERY);
-        $params = _cdn_cloudfront_private_custom_policy_params();
-        if ($parts) {
-          $params += _cdn_cloudfront_private_parse_str_multiple($parts);
-        }
-        $uri = preg_replace('/\?.*/', '', $uri) . '?' . drupal_http_build_query($params);
-      }
-      else {
-        // @todo - Handle exception condition. Site design should limit this.
-      }
-    }
-  }
-}
+  // will normally guarantee this. However, we're not guaranteeing the uri is
+  // necessarily a cloudfront URL, that's up to implementing event subscribers.
+  $event = new CdnCloudfrontPrivateEvent($uri);
+  \Drupal::service('event_dispatcher')->dispatch(CdnCloudfrontPrivateEvents::DETERMINE_URI_PROTECTION, $event);
 
-/**
- * Implements hook_file_presave()
- */
-function cdn_cloudfront_private_file_presave($file) {
-  // This might be a new file and as such isn't set up as a file entity.
-  if (empty($file->fid)) {
+  if (!$event->isProtected()) {
     return;
   }
-  // Identify the file as allowing public access.
-  $file_wrapper = entity_metadata_wrapper('file', $file);
-  $is_public_file = ($file_wrapper->__isset('field_guest_access') && $file_wrapper->field_guest_access->value());
-  if ($is_public_file && !strpos($file->filename, CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING)) {
-    $stream_wrapper = file_stream_wrapper_get_instance_by_uri($file->uri);
-    $basename = drupal_basename($file->uri);
-    // Next from file_create_filename()
-    $pos = strrpos($basename, '.');
-    $extension = substr($basename, $pos);
-    $name = substr($basename, 0, $pos);
-    // We don't really need to munge since we are requiring an OK extension to begin with.
-    $destination = file_destination($stream_wrapper->dirname($file->uri) . '/' . $name . '.' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING . $extension, FILE_EXISTS_RENAME);
-    // The file was already saved to disk; file_save() just calls hooks and writes to the DB.
-    $stream_wrapper->rename($file->uri, $destination);
-    $file->uri = $destination;
-    $file->filename = drupal_basename($destination);
-  }
-  else if (strpos($file->filename, CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING) && !$is_public_file) {
-    $stream_wrapper = file_stream_wrapper_get_instance_by_uri($file->uri);
-    $basename = drupal_basename($file->uri);
-    $destination = file_destination($stream_wrapper->dirname($file->uri) . '/' . str_replace('.' . CDN_CLOUDFRONT_PRIVATE_PUBLIC_STRING, '', $basename), FILE_EXISTS_RENAME);
-    $file->filename = drupal_basename($destination);
-    $stream_wrapper->rename($file->uri, $destination);
-    $file->uri = $destination;
-  }
-}
-
-/**
- * Return the external IP (for circumstances where we are local).
- *
- * @return string External IP
- */
-function _cdn_cloudfront_private_external_ip() {
-  $ip = variable_get('cdn_cloudfront_private_external_ip');
-  if (!$ip || ((REQUEST_TIME - variable_get('cdn_cloudfront_private_external_ip_last', 0)) > 60*60)) {
-    $ip = file_get_contents('http://phihag.de/ip/');
-    // @todo - Handle timeout or other failure. Not critical since this is only for development.
-    variable_set('cdn_cloudfront_private_external_ip', $ip);
-    variable_set('cdn_cloudfront_private_external_ip_last', REQUEST_TIME);
-  }
-  return $ip;
-}
-
-/**
- * Determine if a future timestamp is near expiry (within 10 minutes.)
- *
- * @param $timestamp
- * @return bool
- */
-function _cdn_cloudfront_private_near_expiry($timestamp) {
-  return $timestamp < (time() + (10*60));
-}
-
-/**
- * Provide custom policy parameters for access to the CloudFront CDN private files.
- *
- * @return array Array of parameters to add to the request
- */
-function _cdn_cloudfront_private_custom_policy_params() {
-  // Get an external IP for the host, if we are on a local development environment.
-  $drupal_ip = ip_address();
-  $ip_address = ($drupal_ip == '127.0.0.1') ? _cdn_cloudfront_private_external_ip() : $drupal_ip;
-  // Statically cache with advanced form since we may call this very often.
-  global $user;
-  static $drupal_static_fast;
-  if (!isset($drupal_static_fast)) {
-    $drupal_static_fast = &drupal_static(__FUNCTION__);
-  }
-  $data = &$drupal_static_fast;
-  // Generate parameters if they're not set or they expire within the next 10 minutes.
-  // We don't check the statically cached time for near-expiry, since we're likely either
-  // generating or pulling from cache.
-  if (!isset($data[$user->uid][$ip_address])) {
-    $cid = 'cdn_cloudfront_private_policy:' . $user->uid . '_' . $ip_address;
-    $cache = cache_get($cid);
-    if ($cache && !_cdn_cloudfront_private_near_expiry($cache->data['#expire'])) {
-      $data[$user->uid][$ip_address] = $cache->data;
-
-    }
-    else {
-      // Default expiration == 5 hours.
-      $expire = REQUEST_TIME + variable_get('cdn_cloudfront_private_token_duration', 60 * 60 * 5);
-      $policy = array(
-        // Extra array is to get a square-bracket JSON "container" to match the AWS docs.
-        'Statement' => array(array(
-          // No Resource as we're granting blanket access.
-          'Condition' => array(
-            'DateLessThan' => array('AWS:EpochTime' => $expire),
-          )
-        ))
-      );
-      // At the time of development, CloudFront doesn't do IPv6. Client must have a dual-stack.
-      // We can't determine IPv4
-      if (strpos($ip_address, ":") === FALSE) {
-        $policy['Statement'][0]['Condition']['IpAddress'] = array('AWS:SourceIp' => $ip_address . '/32');
-      }
-      $policy = json_encode($policy);
-
-      $record = $data[$user->uid][$ip_address] = array(
-        '#expire' => $expire,
-        '#params' => array(
-          'Policy' => _cdn_cloudfront_private_base64_encode($policy),
-          'Signature' => _cdn_cloudfront_private_base64_encode(_cdn_cloudfront_private_rsa_sha1_sign($policy)),
-          'Key-Pair-Id' => variable_get('cdn_cloudfront_private_key_id'),
-        )
-      );
-      // @todo - Should we use our own cache table?
-      cache_set($cid, $record, 'cache', $expire);
-    }
-  }
-  return $data[$user->uid][$ip_address]['#params'];
-}
-
-/**
- * Encodes a string into Base64 and sanitizes.
- *
- * Similar to drupal_base64_encode but the replacements are different.
- *
- * @param $string String to sanitize
- * @return string Sanitized string
- */
-function _cdn_cloudfront_private_base64_encode($string) {
-  $data = base64_encode($string);
-  // @see http://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-creating-signed-url-custom-policy.html
-  return strtr($data, array('+' => '-', '/' => '~', '=' => '_'));
-}
-
-/**
- * Helper function to parse a query string in a Perl-like fashion.
- *
- * @see http://www.php.net/manual/en/function.parse-str.php#76792
- * @see http://perldoc.perl.org/CGI.html#FETCHING-THE-VALUE-OR-VALUES-OF-A-SINGLE-NAMED-PARAMETER:
- *
- * @param string $str The string to parse
- *
- * @return array The parsed string.
- */
-function _cdn_cloudfront_private_parse_str_multiple($str) {
-  $arr = array();
-
-  $pairs = explode('&', $str);
-
-  // Loop through each pair
-  foreach ($pairs as $i) {
-    // Split into name and value
-    list($name,$value) = explode('=', $i, 2);
-    $value = urldecode($value);
-
-    // If name already exists
-    if (isset($arr[$name])) {
-      // Stick multiple values into an array
-      if (is_array($arr[$name])) {
-        $arr[$name][] = $value;
-      }
-      else {
-        $arr[$name] = array($arr[$name], $value);
-      }
-    }
-    // Otherwise, simply stick it in a scalar
-    else {
-      $arr[$name] = $value;
-    }
+  if (!UrlHelper::isExternal($uri)) {
+    throw new \Exception('Cannot sign a non-external URL for Cloudfront.');
   }
 
-  return $arr;
+  // Signed URLs are likely not cacheable (if they are targeted for a user)
+  // so while this is a blunt instrument, there's currently no cache metadata
+  // for the generated file URL.
+  // @see https://github.com/BradJonesLLC/cdn_cloudfront_private/issues/1
+  if (!$event->isPageCacheable()) {
+    \Drupal::service('page_cache_kill_switch')->trigger();
+  }
+
+  /** @var \Drupal\cdn_cloudfront_private\CdnCloudfrontPrivateManager $manager */
+  $manager = \Drupal::service('cdn_cloudfront_private.manager');
+  $uri = $manager->getSignedUrl($uri, $event->getPolicyStatement());
 }
