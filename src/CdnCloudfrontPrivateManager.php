@@ -13,6 +13,17 @@ use Drupal\Core\Config\ConfigFactory;
 class CdnCloudfrontPrivateManager {
 
   /**
+   *
+   */
+  const DEFAULT_POLICY_STATEMENT = [
+    'Condition' => [
+      'DateLessThan' => [
+        'AWS:EpochTime' => REQUEST_TIME + (60 * 60 * 5),
+      ],
+    ],
+  ];
+
+  /**
    * Drupal\Core\Config\ConfigFactory definition.
    *
    * @var \Drupal\Core\Config\ConfigFactory
@@ -20,15 +31,28 @@ class CdnCloudfrontPrivateManager {
   protected $config_factory;
 
   /**
+   * The cloudfront client.
+   *
+   * @var CloudFrontClient
+   */
+  protected $client;
+
+  /**
    * Constructor.
    */
   public function __construct(ConfigFactory $config_factory) {
     $this->config_factory = $config_factory;
-    $config = $this->config_factory->get('cdn_cloudfront_private.config');
+  }
+
+  protected function getClient() {
+    if ($this->client) {
+      return $this->client;
+    }
     $this->client = new CloudFrontClient([
-      'private_key' => $config->get('private_key'),
-      'key_pair_id' => $config->get('key_pair_id'),
+      'region' => 'us-west-2', // Not effective, but required.
+      'version' => '2016-09-29',
     ]);
+    return $this->client;
   }
 
   /**
@@ -39,9 +63,13 @@ class CdnCloudfrontPrivateManager {
    * @return string
    */
   public function getSignedUrl($url, $policy) {
-    return $this->client->getSignedUrl([
+    $client = $this->getClient();
+    $config = $this->config_factory->get('cdn_cloudfront_private.config');
+    return $client->getSignedUrl([
+      'private_key' => $config->get('private_key'),
+      'key_pair_id' => $config->get('key_pair_id'),
       'url' => $url,
-      'policy' => json_encode($policy),
+      'policy' => json_encode(['Statement' => $policy]),
     ]);
   }
 

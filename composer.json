@@ -14,5 +14,8 @@
     "require": {
         "drupal/cdn": "*",
         "aws/aws-sdk-php": "^3.0"
+    },
+    "suggest": {
+        "drupal/cdn": "Manages CDN URL rewriting."
     }
 }

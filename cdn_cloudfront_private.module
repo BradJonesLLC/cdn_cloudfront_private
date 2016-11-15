@@ -12,16 +12,20 @@ use Drupal\Component\Utility\UrlHelper;
  * Implements hook_file_url_alter()
  */
 function cdn_cloudfront_private_file_url_alter(&$uri) {
+  /** @var \Drupal\cdn_cloudfront_private\CdnCloudfrontPrivateManager $manager */
+  $manager = \Drupal::service('cdn_cloudfront_private.manager');
+
   // We assume that CDN module has already done its thing. Default module weight
   // will normally guarantee this. However, we're not guaranteeing the uri is
   // necessarily a cloudfront URL, that's up to implementing event subscribers.
   $event = new CdnCloudfrontPrivateEvent($uri);
+  $event->setPolicyStatement($manager::DEFAULT_POLICY_STATEMENT);
   \Drupal::service('event_dispatcher')->dispatch(CdnCloudfrontPrivateEvents::DETERMINE_URI_PROTECTION, $event);
 
   if (!$event->isProtected()) {
     return;
   }
-  if (!UrlHelper::isExternal($uri)) {
+  if (!UrlHelper::isExternal($event->getUri())) {
     throw new \Exception('Cannot sign a non-external URL for Cloudfront.');
   }
 
@@ -33,7 +37,5 @@ function cdn_cloudfront_private_file_url_alter(&$uri) {
     \Drupal::service('page_cache_kill_switch')->trigger();
   }
 
-  /** @var \Drupal\cdn_cloudfront_private\CdnCloudfrontPrivateManager $manager */
-  $manager = \Drupal::service('cdn_cloudfront_private.manager');
-  $uri = $manager->getSignedUrl($uri, $event->getPolicyStatement());
+  $uri = $manager->getSignedUrl($event->getUri(), $event->getPolicyStatement());
 }

@@ -44,13 +44,6 @@ class CdnCloudfrontPrivateEvent extends Event {
    */
   public function __construct($uri) {
     $this->uri = $uri;
-    $this->policyStatement = [
-      'Condition' => [
-        'DateLessThan' => [
-          'AWS:EpochTime' => REQUEST_TIME + (60 * 60 * 5),
-        ],
-      ],
-    ];
   }
 
   /**
@@ -81,6 +74,13 @@ class CdnCloudfrontPrivateEvent extends Event {
    */
   public function getUri() {
     return $this->uri;
+  }
+
+  public function setUri($uri) {
+    if (!is_string($uri)) {
+      throw new \Exception('Uri must be a string.');
+    }
+    $this->uri = $uri;
   }
 
   /**
