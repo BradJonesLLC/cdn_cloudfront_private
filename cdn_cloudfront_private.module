@@ -19,7 +19,7 @@ function cdn_cloudfront_private_file_url_alter(&$uri) {
   // will normally guarantee this. However, we're not guaranteeing the uri is
   // necessarily a cloudfront URL, that's up to implementing event subscribers.
   $event = new CdnCloudfrontPrivateEvent($uri);
-  $event->setPolicyStatement($manager::DEFAULT_POLICY_STATEMENT);
+  $event->setPolicyStatement($manager->getDefaultPolicyStatement());
   \Drupal::service('event_dispatcher')->dispatch(CdnCloudfrontPrivateEvents::DETERMINE_URI_PROTECTION, $event);
 
   if (!$event->isProtected()) {
@@ -37,5 +37,7 @@ function cdn_cloudfront_private_file_url_alter(&$uri) {
     \Drupal::service('page_cache_kill_switch')->trigger();
   }
 
-  $uri = $manager->getSignedUrl($event->getUri(), $event->getPolicyStatement());
+  $uri = $event->needsProcessing()
+    ? $manager->getSignedUrl($event->getPolicyStatement(), $event->getMethod(), $event->getUri())
+    : $event->getUri();
 }

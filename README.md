@@ -5,10 +5,13 @@ through Amazon Cloudfront. It has an implied dependency on CDN module, however t
 is no UI and you will need to code specific business rules regarding
 what content to protect, and how.
 
+Access may be controlled by signed URLs (query string parameters) or a
+signed cookie.
+
 ## General principles
 
-The module implements `hook_file_url_alter()`, which normally will be
-called after CDN module, unless you have manually adjusted module weights.
+When signing URLs, we implement `hook_file_url_alter()`, which normally will be
+called after CDN module unless you have manually adjusted module weights.
 An event is then emitted to determine if the Uri being altered qualifies
 for protection and should be signed.
 
@@ -16,7 +19,9 @@ for protection and should be signed.
 
 Once this module signs a URL for private files access, it uses the Drupal
 page cache "kill switch," since there's no cache metadata associated
-with these rewritten URLs and no support (yet) for that in core.
+with these rewritten URLs and no support (yet) for that in core. This is
+configurable when responding to the event, and it's possible you could set
+signed cookies at login, for instance, and keep pages cacheable.
 
 ### One approach to protecting content using Flysystem
 

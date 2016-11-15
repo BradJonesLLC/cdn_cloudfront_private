@@ -40,10 +40,58 @@ class CdnCloudfrontPrivateEvent extends Event {
   protected $pageCacheable = FALSE;
 
   /**
+   * Method - either url or cookie.
+   *
+   * @var string
+   */
+  protected $method = 'url';
+
+  /**
+   * Flag for whether the uri needs processing by the Cloudfront client.
+   *
+   * @var bool
+   */
+  protected $needsProcessing = TRUE;
+
+  /**
    * @inheritDoc
    */
   public function __construct($uri) {
     $this->uri = $uri;
+  }
+
+  /**
+   * @return string
+   */
+  public function getMethod() {
+    return $this->method;
+  }
+
+  /**
+   * @param string $method
+   */
+  public function setMethod($method) {
+    if (!in_array($method, ['cookie', 'url'])) {
+      throw new \Exception('Invalid method.');
+    }
+    $this->method = $method;
+  }
+
+  /**
+   * @return boolean
+   */
+  public function needsProcessing() {
+    return $this->needsProcessing;
+  }
+
+  /**
+   * @param boolean $needsProcessing
+   */
+  public function setNeedsProcessing($needsProcessing) {
+    if (!is_bool($needsProcessing)) {
+      throw new \Exception('Processing value must be a boolean.');
+    }
+    $this->needsProcessing = $needsProcessing;
   }
 
   /**
@@ -124,6 +172,7 @@ class CdnCloudfrontPrivateEvent extends Event {
     if (!is_array($statement)) {
       throw new \Exception('Policy statement must be an array.');
     }
+    $this->policyStatement = $statement;
   }
 
 }
