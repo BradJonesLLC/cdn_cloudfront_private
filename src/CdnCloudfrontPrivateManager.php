@@ -83,7 +83,7 @@ class CdnCloudfrontPrivateManager {
       'private_key' => $config->get('private_key'),
       'key_pair_id' => $config->get('key_pair_id'),
       'url' => $url,
-      'policy' => json_encode(['Statement' => $policy]),
+      'policy' => json_encode(['Statement' => [$policy]], JSON_UNESCAPED_SLASHES),
     ];
     if ($method == 'cookie') {
       if (empty($policy['Resource'])) {
