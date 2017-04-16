@@ -1,5 +1,5 @@
 {
-    "name": "bradjonesllc/cdn_cloudfront_private",
+    "name": "drupal/cdn_cloudfront_private",
     "description": "Enables support for serving private content from AWS Cloudfront.",
     "type": "drupal-module",
     "license": "GPL-2.0+",
@@ -12,7 +12,6 @@
         }
     ],
     "require": {
-        "drupal/cdn": "*",
         "aws/aws-sdk-php": "^3.0"
     },
     "suggest": {
