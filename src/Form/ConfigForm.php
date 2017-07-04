@@ -34,28 +34,28 @@ class ConfigForm extends ConfigFormBase {
   public function buildForm(array $form, FormStateInterface $form_state) {
     $config = $this->config('cdn_cloudfront_private.config');
     $form['security'] = [
-      '#title' => t('Security configuration'),
+      '#title' => $this->t('Security configuration'),
       '#type' => 'details',
       '#open' => !$config->get('key_pair_id') && !$config->get('private_key'),
     ];
     $form['security']['key_pair_id'] = [
       '#type' => 'textfield',
-      '#title' => t('Key Pair ID'),
+      '#title' => $this->t('Key Pair ID'),
       '#default_value' => $config->get('key_pair_id'),
       '#required' => TRUE,
     ];
     $form['security']['private_key'] = [
       '#type' => 'textfield',
-      '#title' => t('Path to PEM file'),
+      '#title' => $this->t('Path to PEM file'),
       '#default_value' => $config->get('private_key'),
-      '#description' => t('Path to PEM keyfile'),
+      '#description' => $this->t('Path to PEM keyfile'),
       '#required' => TRUE,
     ];
     $form['domain'] = [
       '#type' => 'textfield',
-      '#title' => t('Domain to use for setting secure cookies'),
+      '#title' => $this->t('Domain to use for setting secure cookies'),
       '#default_value' => $config->get('domain'),
-      '#description' => t('A valid domain string for setrawcookie()'),
+      '#description' => $this->t('A valid domain string for setrawcookie()'),
     ];
     return parent::buildForm($form, $form_state);
   }
