@@ -5,7 +5,7 @@ namespace Drupal\cdn_cloudfront_private\Event;
 use Symfony\Component\EventDispatcher\Event;
 
 /**
- * Class CdnCloudfrontPrivateEvent
+ * Class CdnCloudfrontPrivateEvent.
  *
  * An event for determining the cloudfront protection status of a uri.
  */
@@ -30,7 +30,7 @@ class CdnCloudfrontPrivateEvent extends Event {
    *
    * @var array
    */
-  protected $policyStatement;
+  protected $policyStatement = [];
 
   /**
    * Whether the page should be cacheable after altering the uri.
@@ -54,42 +54,58 @@ class CdnCloudfrontPrivateEvent extends Event {
   protected $needsProcessing = TRUE;
 
   /**
-   * @inheritDoc
+   * Constructor.
    */
   public function __construct($uri) {
     $this->uri = $uri;
   }
 
   /**
+   * Getter for the signature method.
+   *
    * @return string
+   *   The signature method.
    */
   public function getMethod() {
     return $this->method;
   }
 
   /**
+   * Method setter.
+   *
    * @param string $method
+   *   The method, either 'cookie' or 'url'.
+   *
+   * @throws \InvalidArgumentException
    */
   public function setMethod($method) {
     if (!in_array($method, ['cookie', 'url'])) {
-      throw new \Exception('Invalid method.');
+      throw new \InvalidArgumentException('Invalid method.');
     }
     $this->method = $method;
   }
 
   /**
-   * @return boolean
+   * Determine if the URL needs further processing (e.g., cookies set.)
+   *
+   * @return bool
+   *   Boolean indicating need for processing.
    */
   public function needsProcessing() {
     return $this->needsProcessing;
   }
 
   /**
-   * @param boolean $needsProcessing
+   * Setter for processing flag.
+   *
+   * @param bool $needsProcessing
+   *   Boolean indicating need for further processing.
+   *
+   * @throws \InvalidArgumentException
    */
   public function setNeedsProcessing($needsProcessing) {
     if (!is_bool($needsProcessing)) {
-      throw new \Exception('Processing value must be a boolean.');
+      throw new \InvalidArgumentException('Processing value must be a boolean.');
     }
     $this->needsProcessing = $needsProcessing;
   }
@@ -97,7 +113,8 @@ class CdnCloudfrontPrivateEvent extends Event {
   /**
    * Get the page cacheable status.
    *
-   * @return boolean
+   * @return bool
+   *   Return whether page could be potentially cacheable.
    */
   public function isPageCacheable() {
     return $this->pageCacheable;
@@ -106,11 +123,14 @@ class CdnCloudfrontPrivateEvent extends Event {
   /**
    * Set the page cacheable status.
    *
-   * @param boolean $pageCacheable
+   * @param bool $pageCacheable
+   *   Boolean cacheable flag.
+   *
+   * @throws \InvalidArgumentException
    */
   public function setPageCacheable($pageCacheable) {
     if (!is_bool($pageCacheable)) {
-      throw new \Exception('Cacheable value must be a boolean.');
+      throw new \InvalidArgumentException('Cacheable value must be a boolean.');
     }
     $this->pageCacheable = $pageCacheable;
   }
@@ -119,14 +139,23 @@ class CdnCloudfrontPrivateEvent extends Event {
    * Get the uri to be tested.
    *
    * @return string
+   *   The URI.
    */
   public function getUri() {
     return $this->uri;
   }
 
+  /**
+   * Setter for the URI.
+   *
+   * @param string $uri
+   *   The URI.
+   *
+   * @throws \InvalidArgumentException
+   */
   public function setUri($uri) {
     if (!is_string($uri)) {
-      throw new \Exception('Uri must be a string.');
+      throw new \InvalidArgumentException('Uri must be a string.');
     }
     $this->uri = $uri;
   }
@@ -135,6 +164,7 @@ class CdnCloudfrontPrivateEvent extends Event {
    * Return whether the uri is marked as protected.
    *
    * @return bool
+   *   Whether the URI is protected.
    */
   public function isProtected() {
     return $this->protected;
@@ -144,11 +174,13 @@ class CdnCloudfrontPrivateEvent extends Event {
    * Set the protection status.
    *
    * @param bool $protected
-   * @throws \Exception
+   *   Boolean indicating protected status.
+   *
+   * @throws \InvalidArgumentException
    */
   public function setProtected($protected = TRUE) {
     if (!is_bool($protected)) {
-      throw new \Exception('Protected value must be a boolean.');
+      throw new \InvalidArgumentException('Protected value must be a boolean.');
     }
     $this->protected = $protected;
   }
@@ -157,6 +189,7 @@ class CdnCloudfrontPrivateEvent extends Event {
    * Get the current policy statement.
    *
    * @return array
+   *   The policy statement.
    */
   public function getPolicyStatement() {
     return $this->policyStatement;
@@ -165,12 +198,14 @@ class CdnCloudfrontPrivateEvent extends Event {
   /**
    * Set the policy statement.
    *
-   * @param $statement
-   * @throws \Exception
+   * @param array $statement
+   *   The policy statement.
+   *
+   * @throws \InvalidArgumentException
    */
-  public function setPolicyStatement($statement) {
+  public function setPolicyStatement(array $statement) {
     if (!is_array($statement)) {
-      throw new \Exception('Policy statement must be an array.');
+      throw new \InvalidArgumentException('Policy statement must be an array.');
     }
     $this->policyStatement = $statement;
   }

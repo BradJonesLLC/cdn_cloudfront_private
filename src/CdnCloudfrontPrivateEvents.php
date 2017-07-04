@@ -3,7 +3,8 @@
 namespace Drupal\cdn_cloudfront_private;
 
 /**
- * Class CdnCloudfrontPrivateEvents
+ * Class CdnCloudfrontPrivateEvents.
+ *
  * @package Drupal\cdn_cloudfront_private
  */
 final class CdnCloudfrontPrivateEvents {

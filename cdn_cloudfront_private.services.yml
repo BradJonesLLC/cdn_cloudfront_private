@@ -2,4 +2,3 @@ services:
   cdn_cloudfront_private.manager:
     class: Drupal\cdn_cloudfront_private\CdnCloudfrontPrivateManager
     arguments: ["@config.factory"]
-

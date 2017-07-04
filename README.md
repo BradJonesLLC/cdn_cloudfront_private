@@ -1,9 +1,9 @@
 # Amazon Cloudfront CDN private files integration
 
 This is an API module to assist with [serving private/protected content](http://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/PrivateContent.html)
-through Amazon Cloudfront. It has an implied dependency on CDN module, however there
-is no UI and you will need to code specific business rules regarding
-what content to protect, and how.
+through Amazon Cloudfront. It has an implied dependency on CDN module,
+however there is no UI and you will need to code specific business
+rules regarding what content to protect, and how.
 
 Access may be controlled by signed URLs (query string parameters) or a
 signed cookie.
@@ -25,7 +25,8 @@ signed cookies at login, for instance, and keep pages cacheable.
 
 ### One approach to protecting content using Flysystem
 
-A sample use case would be to use [Flysystem](https://drupal.org/project/flysystem)
+A sample use case would be to use
+[Flysystem](https://drupal.org/project/flysystem)
 to create a new "protected" stream wrapper to in effect provide a souped-up
 version of the private files functionality in Drupal core. CDN module will
 refuse to re-write that URL since Flysystem does not consider its streams

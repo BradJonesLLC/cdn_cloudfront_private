@@ -1,7 +1,8 @@
 <?php
 
 /**
- * @file Cloudfront private files implementation
+ * @file
+ * Cloudfront private files implementation.
  */
 
 use Drupal\cdn_cloudfront_private\CdnCloudfrontPrivateEvents;
@@ -9,7 +10,7 @@ use Drupal\cdn_cloudfront_private\Event\CdnCloudfrontPrivateEvent;
 use Drupal\Component\Utility\UrlHelper;
 
 /**
- * Implements hook_file_url_alter()
+ * Implements hook_file_url_alter().
  */
 function cdn_cloudfront_private_file_url_alter(&$uri) {
   /** @var \Drupal\cdn_cloudfront_private\CdnCloudfrontPrivateManager $manager */
