@@ -19,6 +19,13 @@ class CdnCloudfrontPrivateEvent extends Event {
   protected $uri;
 
   /**
+   * The original uri, prior to CDN's re-writing.
+   *
+   * @var string
+   */
+  protected $originalUri;
+
+  /**
    * Whether to protect and sign the uri.
    *
    * @var bool
@@ -56,7 +63,8 @@ class CdnCloudfrontPrivateEvent extends Event {
   /**
    * Constructor.
    */
-  public function __construct($uri) {
+  public function __construct($uri, $originalUri) {
+    $this->originalUri = $originalUri;
     $this->uri = $uri;
   }
 
@@ -158,6 +166,15 @@ class CdnCloudfrontPrivateEvent extends Event {
       throw new \InvalidArgumentException('Uri must be a string.');
     }
     $this->uri = $uri;
+  }
+
+  /**
+   * Gets the original uri.
+   *
+   * @return string
+   */
+  public function getOriginalUri() {
+    return $this->originalUri;
   }
 
   /**
