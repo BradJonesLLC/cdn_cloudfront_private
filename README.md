@@ -1,19 +1,14 @@
 # Amazon Cloudfront CDN private files integration
 
 This is an API module to assist with [serving private/protected content](http://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/PrivateContent.html)
-through Amazon Cloudfront. It has an implied dependency on CDN module,
-however there is no UI and you will need to code specific business
-rules regarding what content to protect, and how.
+through Amazon Cloudfront.
 
 Access may be controlled by signed URLs (query string parameters) or a
 signed cookie.
 
-## General principles
-
-When signing URLs, we implement `hook_file_url_alter()`, which normally will be
-called after CDN module unless you have manually adjusted module weights.
-An event is then emitted to determine if the Uri being altered qualifies
-for protection and should be signed.
+This module has no UI and serves as an API for developers to respond to a
+Symfony event that requests input of the protection status of CDN-rewritten
+URIs.
 
 ## Known issues
 
@@ -40,7 +35,7 @@ of `hook_file_download()`:
  * Implements hook_file_download().
  */
 function mymodule_file_download($uri) {
-  $scheme = Drupal::service('file_system')->uriScheme($uri);
+  $scheme = \Drupal::service('file_system')->uriScheme($uri);
   if ($scheme == 'swift-protected') {
     $request = Drupal::request();
     if ($request->headers->get('X-CDN-Token') != getenv('CDN_TOKEN')) {
@@ -53,4 +48,4 @@ function mymodule_file_download($uri) {
 
 ## Copyright and license.
 
-Copyright 2016 Brad Jones LLC. GPL-2.
+Copyright 2016-2018 Brad Jones LLC. GPL-2.
