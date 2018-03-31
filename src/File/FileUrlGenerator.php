@@ -106,7 +106,7 @@ class FileUrlGenerator {
    * @return array
    *   A default policy statement.
    */
-  protected function getDefaultPolicyStatement() {
+  public static function getDefaultPolicyStatement() {
     return [
       'Resource' => 'https://*',
       'Condition' => [
@@ -134,16 +134,23 @@ class FileUrlGenerator {
    * @return string
    *   The URL, signed.
    */
-  protected function getSignedUrl(array $policy, $method, $url = NULL, $secure = TRUE, $path = '/') {
+  public function getSignedUrl(array $policy, $method, $url = NULL, $secure = TRUE, $path = '/') {
     if ($method == 'url' && is_null($url)) {
       throw new \Exception('Must specify a url if signing a URL.');
     }
     $client = $this->getClient();
     $config = $this->configFactory->get('cdn_cloudfront_private.config');
-    $awsKey = $this->keyRepository->getKey($config->get('key'))->getKeyValues();
+    $pem = $this->keyRepository->getKey($config->get('key'));
+    if ($pem->getKeyProvider()->getPluginDefinition()['storage_method'] == 'file') {
+      $configuration = $pem->getKeyProvider()->getConfiguration();
+      $privateKey = $configuration['file_location'];
+    }
+    else {
+      $privateKey = $pem->getKeyValue();
+    }
     $opts = [
-      'private_key' => $awsKey['private_key'],
-      'key_pair_id' => $awsKey['key_pair_id'],
+      'private_key' => $privateKey,
+      'key_pair_id' => $config->get('key_pair_id'),
       'url' => $url,
       'policy' => json_encode(['Statement' => [$policy]], JSON_UNESCAPED_SLASHES),
     ];
@@ -190,7 +197,7 @@ class FileUrlGenerator {
       return FALSE;
     }
     $event = new CdnCloudfrontPrivateEvent($uri, $originalUri);
-    $event->setPolicyStatement($this->getDefaultPolicyStatement());
+    $event->setPolicyStatement(self::getDefaultPolicyStatement());
     $this->eventDispatcher->dispatch(CdnCloudfrontPrivateEvents::DETERMINE_URI_PROTECTION, $event);
 
     if (!$event->isProtected()) {
@@ -208,8 +215,11 @@ class FileUrlGenerator {
       $this->killSwitch->trigger();
     }
 
+    $signableUri = strpos($event->getUri(), '//') === 0
+      ? 'https:' . $event->getUri()
+      : $event->getUri();
     return $event->needsProcessing()
-      ? $this->getSignedUrl($event->getPolicyStatement(), $event->getMethod(), $event->getUri())
+      ? $this->getSignedUrl($event->getPolicyStatement(), $event->getMethod(), $signableUri)
       : $event->getUri();
   }
 
