@@ -172,6 +172,7 @@ class CdnCloudfrontPrivateEvent extends Event {
    * Gets the original uri.
    *
    * @return string
+   *   The original uri.
    */
   public function getOriginalUri() {
     return $this->originalUri;

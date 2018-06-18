@@ -11,6 +11,9 @@ use Drupal\Core\PageCache\ResponsePolicy\KillSwitch;
 use Drupal\key\KeyRepository;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
+/**
+ * Class FileUrlGenerator.
+ */
 class FileUrlGenerator {
 
   /**
@@ -61,6 +64,14 @@ class FileUrlGenerator {
    * @param object $decoratedGenerator
    *   The decorated generator. Right now there is no interface, but we don't
    *   hint a particular class because there may be more than one decorator.
+   * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $eventDispatcher
+   *   The event dispatcher.
+   * @param \Drupal\Core\Config\ConfigFactory $configFactory
+   *   The config factory.
+   * @param \Drupal\key\KeyRepository $keyRepository
+   *   The key repository.
+   * @param \Drupal\Core\PageCache\ResponsePolicy\KillSwitch $killSwitch
+   *   The page cache kill switch.
    */
   public function __construct($decoratedGenerator, EventDispatcherInterface $eventDispatcher, ConfigFactory $configFactory, KeyRepository $keyRepository, KillSwitch $killSwitch) {
     $this->decoratedGenerator = $decoratedGenerator;
@@ -72,11 +83,6 @@ class FileUrlGenerator {
 
   /**
    * Magic method to proxy calls for non-overridden methods.
-   *
-   * @param $method
-   * @param $args
-   *
-   * @return mixed
    */
   public function __call($method, $args) {
     return call_user_func_array(array($this->decoratedGenerator, $method), $args);

@@ -27,6 +27,9 @@ class ConfigForm extends ConfigFormBase {
    * ConfigForm constructor.
    *
    * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
+   *   The config factory.
+   * @param \Drupal\key\KeyRepositoryInterface $keyRepository
+   *   The key repository.
    */
   public function __construct(ConfigFactoryInterface $config_factory, KeyRepositoryInterface $keyRepository) {
     parent::__construct($config_factory);
@@ -34,7 +37,10 @@ class ConfigForm extends ConfigFormBase {
   }
 
   /**
+   * Create instance.
+   *
    * @param \Symfony\Component\DependencyInjection\ContainerInterface $container
+   *   The service container.
    *
    * @return static
    */
@@ -81,7 +87,7 @@ class ConfigForm extends ConfigFormBase {
     ];
     $form['key'] = [
       '#type' => 'select',
-      '#options' => $this->keyRepository->getKeyNamesAsOptions(['type' => 'authentication',]),
+      '#options' => $this->keyRepository->getKeyNamesAsOptions(['type' => 'authentication']),
       '#required' => TRUE,
       '#title' => $this->t('<code>authentication</code> key containing PEM data.'),
       '#default_value' => $config->get('key'),
@@ -90,8 +96,7 @@ class ConfigForm extends ConfigFormBase {
   }
 
   /**
-   * @param array $form
-   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   * {@inheritdoc}
    */
   public function validateForm(array &$form, FormStateInterface $form_state) {
     parent::validateForm($form, $form_state);
