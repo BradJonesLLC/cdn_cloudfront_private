@@ -4,5 +4,4 @@ package: CDN
 type: module
 core: 8.x
 dependencies:
-  - cdn:cdn
   - key:key
