@@ -13,7 +13,6 @@
     ],
     "require": {
         "aws/aws-sdk-php": "^3.0",
-        "drupal/key": "^1",
-        "drupal/cdn": "^3"
+        "drupal/key": "^1"
     }
 }
